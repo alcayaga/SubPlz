@@ -29,10 +29,17 @@ def unload_model(model):
 
 
 def faster_transcribe(self, audio, name, **args):
-    args["log_prob_threshold"] = args.pop("logprob_threshold")
+    # These overrides only apply to faster-whisper
+    if type(self).__name__ != "Whisper":
+        if "logprob_threshold" in args:
+            args["log_prob_threshold"] = args.pop("logprob_threshold")
+        args["length_penalty"] = args["length_penalty"] if args["length_penalty"] else 5
+
     args["beam_size"] = args["beam_size"] if args["beam_size"] else 5
     args["patience"] = args["patience"] if args["patience"] else 1
-    args["length_penalty"] = args["length_penalty"] if args["length_penalty"] else 5
+    if args.get("denoiser") == "":
+        args["denoiser"] = None
+
     result = self.transcribe(audio, best_of=1, **args)
     # result = self.refine(audio, result, **args)
     result.pad(0.5, 0.5, word_level=False)
@@ -103,13 +110,25 @@ def get_model(backend):
                 compute_type=compute_type,
                 num_workers=num_workers,
             )
-            # model.transcribe2 = model.transcribe_stable
-            # model.transcribe2 = model.transcribe
-            # TODO: Don't monkeypatch this - unnecessary
-            model.faster_transcribe = MethodType(faster_transcribe, model)
         else:
             logger.info("MPS device detected! Using standard stable-ts PyTorch model for Apple Silicon GPU acceleration.")
+            
+            # Patch float64 bug for MPS. whisper in its word-level timestamp alignment calls .double()
+            # on a tensor before moving it to .cpu(). Since Mac MPS hardware does not support float64
+            # this crashes the library, so the order of operations is flipped
+            import whisper.timing
+            import stable_whisper.timing
+            def _patched_dtw(x):
+                return whisper.timing.dtw_cpu(x.cpu().double().numpy())
+            whisper.timing.dtw = _patched_dtw
+            stable_whisper.timing.dtw = _patched_dtw
+            
             model = stable_whisper.load_model(model_name, device=device)
+
+        # model.transcribe2 = model.transcribe_stable
+        # model.transcribe2 = model.transcribe
+        # TODO: Don't monkeypatch this - unnecessary
+        model.faster_transcribe = MethodType(faster_transcribe, model)
 
     else:
         model = whisper.load_model(model).to(device)
