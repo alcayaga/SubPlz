@@ -48,7 +48,7 @@ def transcribe(source, be) -> TranscriptionResult:
     logger.info("📝 Starting transcription process...")
 
     gpu_retries = 2
-    devices_to_try = ["cuda", "cpu"] if be.device == "cuda" else ["cpu"]
+    devices_to_try = ["cuda", "cpu"] if be.device == "cuda" else ([be.device, "cpu"] if be.device != "cpu" else ["cpu"])
 
     for device in devices_to_try:
         temp_be = deepcopy(be)

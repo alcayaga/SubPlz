@@ -95,17 +95,21 @@ def get_model(backend):
     elif stable_ts:
         import stable_whisper
 
-        model = stable_whisper.load_faster_whisper(
-            model_name,
-            device=device,
-            local_files_only=local_files_only,
-            compute_type=compute_type,
-            num_workers=num_workers,
-        )
-        # model.transcribe2 = model.transcribe_stable
-        # model.transcribe2 = model.transcribe
-        # TODO: Don't monkeypatch this - unnecessary
-        model.faster_transcribe = MethodType(faster_transcribe, model)
+        if device != "mps":
+            model = stable_whisper.load_faster_whisper(
+                model_name,
+                device=device,
+                local_files_only=local_files_only,
+                compute_type=compute_type,
+                num_workers=num_workers,
+            )
+            # model.transcribe2 = model.transcribe_stable
+            # model.transcribe2 = model.transcribe
+            # TODO: Don't monkeypatch this - unnecessary
+            model.faster_transcribe = MethodType(faster_transcribe, model)
+        else:
+            logger.info("MPS device detected! Using standard stable-ts PyTorch model for Apple Silicon GPU acceleration.")
+            model = stable_whisper.load_model(model_name, device=device)
 
     else:
         model = whisper.load_model(model).to(device)

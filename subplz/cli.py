@@ -248,7 +248,7 @@ ARGUMENTS = {
     "device": {
         "flags": ["--device"],
         "kwargs": {
-            "default": "cuda" if torch.cuda.is_available() else "cpu",
+            "default": "cuda" if torch.cuda.is_available() else ("mps" if hasattr(torch.backends, "mps") and torch.backends.mps.is_available() else "cpu"),
             "help": "device to do inference on",
         },
     },
